@@ -3766,8 +3766,14 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	 * kernel ->   user   switch + mmdrop() active
 	 *   user ->   user   switch
 	 */
-	if (!next->mm) {                                // to kernel
-		enter_lazy_tlb(prev->active_mm, next);
+	if (!mm) {
+		next->active_mm = oldmm;
+		mmgrab(oldmm);
+		enter_lazy_tlb(oldmm, next);
+	} else {
+		switch_mm_irqs_off(oldmm, mm, next);
+		lru_gen_use_mm(mm);
+	}
 
 		next->active_mm = prev->active_mm;
 		if (prev->mm)                           // from user
