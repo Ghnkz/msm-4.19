@@ -508,7 +508,7 @@ config TCP_CONG_BIC
 
 config TCP_CONG_CUBIC
 	tristate "CUBIC TCP"
-	default m
+	default y
 	---help---
 	This is version 2.0 of BIC-TCP which uses a cubic growth function
 	among other techniques.
@@ -702,7 +702,7 @@ config TCP_CONG_BBRPLUS
         
 choice
 	prompt "Default TCP congestion control"
-	default DEFAULT_BBRPLUS
+	default DEFAULT_WESTWOOD
 	help
 	  Select the TCP congestion control that will be used by default
 	  for all connections.
@@ -765,7 +765,7 @@ config DEFAULT_TCP_CONG
 	default "cdg" if DEFAULT_CDG
 	default "bbr" if DEFAULT_BBR
         default "bbrplus" if DEFAULT_BBRPLUS
-	default "bbrplus"
+	default "westwood"
 
 config TCP_MD5SIG
 	bool "TCP: MD5 Signature Option support (RFC2385)"
