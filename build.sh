@@ -105,7 +105,7 @@ cp out/arch/arm64/boot/Image.gz-dtb AnyKernel/
 
 # ===== Zip kernel =====
 cd AnyKernel
-ZIP_NAME="Naughty-${GIT_REF_NAME}-${BUILD_TIME}.zip"
+ZIP_NAME="NaughtyKernel${GIT_REF_NAME}-${BUILD_TIME}.zip"
 zip -r "../${ZIP_NAME}" *
 cd "$KERNEL_DIR"
 
