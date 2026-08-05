@@ -151,7 +151,8 @@ struct shash_desc {
 	void *__ctx[] CRYPTO_MINALIGN_ATTR;
 };
 
-
+#define HASH_MAX_DIGESTSIZE	 64
+#define HASH_MAX_STATESIZE	512
 #define HASH_MAX_DESCSIZE	(sizeof(struct shash_desc) + 360)
 
 #define SHASH_DESC_ON_STACK(shash, ctx)				  \
