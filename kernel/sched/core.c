@@ -1366,6 +1366,7 @@ static inline int uclamp_validate(struct task_struct *p,
 static void __setscheduler_uclamp(struct task_struct *p,
 				  const struct sched_attr *attr) { }
 static inline void uclamp_fork(struct task_struct *p) { }
+static inline void uclamp_post_fork(struct task_struct *p) { }
 
 long schedtune_task_margin(struct task_struct *task);
 
