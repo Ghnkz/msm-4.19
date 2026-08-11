@@ -179,12 +179,32 @@ select_clang() {
 # Catat file yang sudah di-tracking git (dan statusnya) SEBELUM setup,
 # supaya nanti bisa tahu file mana saja yang diubah oleh curl/setup.sh
 # dan bisa dikembalikan (restore) setelah build sukses.
+#
+# CATATAN PENTING (devcontainer/Codespaces): git sering menolak repo dengan
+# error "detected dubious ownership in repository" kalau owner folder beda
+# dari user yang menjalankan git (umum terjadi di /workspaces/...). Kalau
+# ini terjadi, `git rev-parse --is-inside-work-tree` gagal DIAM-DIAM (tanpa
+# pesan error yang terlihat, karena outputnya dibuang) sehingga fitur
+# restore ini tidak pernah jalan. Baris di bawah menandai folder ini aman
+# supaya git mau bekerja normal.
+git config --global --add safe.directory "$KERNEL_DIR" 2>/dev/null || true
+
 GIT_AVAILABLE=0
 if git -C "$KERNEL_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   GIT_AVAILABLE=1
+  echo "==> Git terdeteksi di $KERNEL_DIR, fitur restore file KernelSU-Next aktif."
+else
+  echo "==> !! Git TIDAK terdeteksi/tidak bisa dipakai di $KERNEL_DIR (bukan repo git, atau bermasalah)."
+  echo "    -> File yang diedit oleh setup.sh KernelSU-Next TIDAK akan bisa dikembalikan otomatis."
 fi
 
 if [ "$SKIP_SETUP" -eq 0 ]; then
+  # Snapshot file untracked SEBELUM setup.sh, supaya nanti bisa dibedakan
+  # mana file baru yang murni muncul akibat setup.sh KernelSU-Next.
+  if [ "$GIT_AVAILABLE" -eq 1 ]; then
+    UNTRACKED_BEFORE_SETUP="$(git -C "$KERNEL_DIR" status --porcelain | awk '/^\?\?/ {print $2}')"
+  fi
+
   # ===== ⏰ Prepare timezone =====
   echo "==> Setting timezone to Asia/Jakarta"
   sudo rm -f /etc/localtime
@@ -226,12 +246,35 @@ if [ "$SKIP_SETUP" -eq 0 ]; then
   # supaya nanti bisa dikembalikan setelah build sukses.
   if [ "$GIT_AVAILABLE" -eq 1 ]; then
     MODIFIED_BY_SETUP="$(git -C "$KERNEL_DIR" diff --name-only)"
+
+    # File baru (untracked) yang muncul SETELAH setup.sh dan belum ada
+    # SEBELUM setup.sh -> ini murni hasil setup.sh, aman untuk dihapus saat
+    # cleanup (folder KernelSU-Next sendiri sudah ditangani terpisah di
+    # bagian cleanup, jadi ini menangkap sisa file lain kalau ada, mis. file
+    # yang ditaruh setup.sh di luar folder KernelSU-Next/).
+    UNTRACKED_AFTER_SETUP="$(git -C "$KERNEL_DIR" status --porcelain | awk '/^\?\?/ {print $2}')"
+    NEW_FILES_BY_SETUP="$(comm -13 \
+      <(printf '%s\n' "$UNTRACKED_BEFORE_SETUP" | sort) \
+      <(printf '%s\n' "$UNTRACKED_AFTER_SETUP" | sort) \
+      | grep -v '^$' \
+      | grep -vE '^(clang|gcc64|gcc32|KernelSU-Next|AnyKernel|out)(/|$)' || true)"
+
+    if [ -n "$MODIFIED_BY_SETUP" ]; then
+      echo "==> File tracked yang diubah setup.sh KernelSU-Next:"
+      echo "$MODIFIED_BY_SETUP"
+    fi
+    if [ -n "$NEW_FILES_BY_SETUP" ]; then
+      echo "==> File baru (untracked) yang ditambahkan setup.sh KernelSU-Next:"
+      echo "$NEW_FILES_BY_SETUP"
+    fi
   else
     MODIFIED_BY_SETUP=""
+    NEW_FILES_BY_SETUP=""
   fi
 else
   echo "==> Setup dilewati. Pastikan folder clang/, gcc64/, gcc32/, dan KernelSU-Next/ sudah lengkap dari build sebelumnya."
   MODIFIED_BY_SETUP=""
+  NEW_FILES_BY_SETUP=""
 fi
 
 # ===== ⚙️ Setup Environment =====
@@ -333,16 +376,65 @@ rm -rf "$KERNEL_DIR/clang" \
        "$KERNEL_DIR/AnyKernel"
 rm -f "$KERNEL_DIR/.clang_bin_dir"
 
+# Apakah folder "out" (hasil `make O=out`, BUKAN dari curl/git clone) juga
+# mau ikut dihapus? Sama seperti pemilihan clang: bisa lewat variabel
+# OUT_CHOICE (CI/non-interaktif) atau menu interaktif kalau tidak diset.
+#   1) Simpan folder 'out'  -> build berikutnya incremental (lebih cepat)
+#   2) Hapus folder 'out'   -> repo benar-benar bersih total, build
+#                              berikutnya mulai dari nol lagi (lebih lambat)
+select_out_cleanup() {
+  if [ -z "${OUT_CHOICE:-}" ]; then
+    if [ -t 0 ]; then
+      echo "==> Folder 'out' mau diapakan?"
+      select opt in "Simpan folder 'out' (incremental build)" "Hapus folder 'out' (bersih total)"; do
+        case "$REPLY" in
+          1|2) OUT_CHOICE="$REPLY"; break ;;
+          *) echo "Pilihan tidak valid, coba lagi." ;;
+        esac
+      done
+    else
+      echo "==> Tidak ada input interaktif dan OUT_CHOICE tidak diset, default: simpan folder 'out'."
+      OUT_CHOICE=1
+    fi
+  fi
+
+  case "$OUT_CHOICE" in
+    1)
+      echo "==> Folder 'out' disimpan (build berikutnya incremental)."
+      ;;
+    2)
+      echo "==> Menghapus folder 'out'..."
+      rm -rf "$KERNEL_DIR/out"
+      ;;
+    *)
+      echo "!! OUT_CHOICE='$OUT_CHOICE' tidak dikenal. Gunakan 1-2. Folder 'out' disimpan (default aman)."
+      ;;
+  esac
+}
+select_out_cleanup
+
 # ============================================================
 # ♻️ Kembalikan file yang sempat diedit oleh curl (setup.sh KernelSU-Next)
 # ============================================================
-if [ "$GIT_AVAILABLE" -eq 1 ] && [ -n "$MODIFIED_BY_SETUP" ]; then
-  echo "==> Mengembalikan file yang diedit oleh setup.sh KernelSU-Next:"
-  echo "$MODIFIED_BY_SETUP"
-  # shellcheck disable=SC2086
-  git -C "$KERNEL_DIR" checkout -- $MODIFIED_BY_SETUP
+if [ "$GIT_AVAILABLE" -eq 1 ]; then
+  if [ -n "$MODIFIED_BY_SETUP" ]; then
+    echo "==> Mengembalikan file tracked yang diedit oleh setup.sh KernelSU-Next:"
+    echo "$MODIFIED_BY_SETUP"
+    # shellcheck disable=SC2086
+    git -C "$KERNEL_DIR" checkout -- $MODIFIED_BY_SETUP
+  fi
+  if [ -n "$NEW_FILES_BY_SETUP" ]; then
+    echo "==> Menghapus file baru yang ditambahkan oleh setup.sh KernelSU-Next:"
+    echo "$NEW_FILES_BY_SETUP"
+    while IFS= read -r f; do
+      [ -n "$f" ] && rm -rf "${KERNEL_DIR:?}/${f}"
+    done <<< "$NEW_FILES_BY_SETUP"
+  fi
+  if [ -z "$MODIFIED_BY_SETUP" ] && [ -z "$NEW_FILES_BY_SETUP" ]; then
+    echo "==> Tidak ada perubahan file tracked/baru yang perlu dikembalikan."
+  fi
 else
-  echo "==> Tidak ada file tracked yang perlu dikembalikan (setup dilewati atau bukan repo git)."
+  echo "==> Dilewati: bukan repo git (atau git bermasalah), tidak ada yang bisa dikembalikan otomatis."
 fi
 
 echo "==> Selesai. Kernel tree sudah dibersihkan dari file toolchain/setup sementara."
