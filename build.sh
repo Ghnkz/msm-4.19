@@ -239,7 +239,7 @@ if [ "$SKIP_SETUP" -eq 0 ]; then
   if [ -d "${KERNEL_DIR}/KernelSU-Next" ]; then
     echo "KernelSU-Next folder already exists, skipping setup..."
   else
-    curl -LSs "https://raw.githubusercontent.com/Ghnkz/KernelSU-Next/stable/kernel/setup.sh" | bash -s syscall
+    curl -LSs "https://raw.githubusercontent.com/Ghnkz-hub/KernelSU-Next/stable/kernel/setup.sh" | bash -s syscall
   fi
 
   # Simpan daftar file yang berubah (tracked) akibat setup.sh KernelSU-Next,
