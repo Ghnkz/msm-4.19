@@ -10,8 +10,8 @@ KERNEL_DIR="$(pwd)"          # assumes this script runs from inside the kernel s
 LOG_FILE="$KERNEL_DIR/build_error.log"
 
 # ----- Config: Telegram (isi dengan bot token & chat id/grup kamu) -----
-TELEGRAM_BOT_TOKEN="${T8843798051:AAHHSmDioK63hm5xdlgaUm355te88WNGH1s:-}"
-TELEGRAM_CHAT_ID="${-1002531162824:-}"
+TELEGRAM_BOT_TOKEN="8843798051:AAHHSmDioK63hm5xdlgaUm355te88WNGH1s"
+TELEGRAM_CHAT_ID="-1002531162824"
 
 # ============================================================
 # Fungsi kirim pesan teks ke Telegram (via bot token & chat id/grup)
